@@ -1,0 +1,64 @@
+name: 조석예보 월간 데이터 수집
+
+on:
+  schedule:
+    # 매월 28일 UTC 15:30 (= 익월 1일 KST 00:30)
+    - cron: "30 15 28 * *"
+  workflow_dispatch:
+    inputs:
+      months:
+        description: "수집할 개월 수"
+        required: false
+        default: "2"
+      station:
+        description: "특정 지점 코드 (비워두면 전체)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 3.12 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 의존성 설치
+        run: pip install -r requirements.txt
+
+      - name: 데이터 수집
+        env:
+          TIDE_API_KEY: ${{ secrets.TIDE_API_KEY }}
+        run: |
+          MONTHS="${{ github.event.inputs.months || '2' }}"
+          STATION="${{ github.event.inputs.station || '' }}"
+          CMD="python src/fetch_all.py --months $MONTHS"
+          if [ -n "$STATION" ]; then
+            CMD="$CMD --station $STATION"
+          fi
+          echo "실행: $CMD"
+          $CMD
+
+      - name: 변경 사항 커밋 및 푸시
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "변경된 데이터 없음 — 커밋 생략"
+          else
+            YEAR=$(date +%Y)
+            MONTH=$(date -d "+1 month" +%m 2>/dev/null || date -v+1m +%m)
+            git commit -m "🌊 조석예보 데이터 갱신 — ${YEAR}년 ${MONTH}월 [skip ci]"
+            git push
+          fi

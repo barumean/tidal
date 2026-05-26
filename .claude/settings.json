@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "tide-forecast": {
+      "command": "python3",
+      "args": ["src/mcp_server.py"],
+      "env": {}
+    }
+  }
+}
